@@ -11,6 +11,7 @@ eval_interval = 300
 learning_rate = 1e-2
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 eval_iters = 200
+n_embd = 32
 #-------------------------------------------------------
 
 torch.manual_seed(1337)
@@ -60,15 +61,21 @@ def estimate_loss():
 
 class BigramLanguageModel(nn.Module):
 
-    def __init__(self, vocab_size):
+    def __init__(self):
         super().__init__()
         # each token directly reads off the logits for the next token from a lookup table
-        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
+        self.token_embedding_table = nn.Embedding(vocab_size, n_embd) #32 dimensional embeddings
+        self.position_embedding_table = nn.Embedding(block_size,n_embd) #each token receives also a position embedding
+        self.lm_head = nn.Linear(n_embd, vocab_size) #linear layer
 
     def forward(self, idx, targets=None):
+        B,T = idx.shape
 
         # idx and targets are both (B,T) tensor of integers
-        logits = self.token_embedding_table(idx) # (B,T,C)
+        tok_emb = self.token_embedding_table(idx) # (B,T,C)
+        pos_emb = self.position_embedding_table(torch.arrange(T, device= device)) # (T,C)
+        x = tok_emb + pos_emb #sums the embeddings, adding position and meaning, # (B,T,C)
+        logits = self.lm_head(x) # (B,T, vocab_size)
 
         if targets is None:
             loss = None
@@ -81,6 +88,7 @@ class BigramLanguageModel(nn.Module):
         return logits, loss
 
     def generate(self, idx, max_new_tokens):
+
         #idx is (B, T) array of indices in the current context
         for _ in range(max_new_tokens):
             # get the predictions
@@ -95,7 +103,7 @@ class BigramLanguageModel(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
         return idx
 
-model = BigramLanguageModel(vocab_size)
+model = BigramLanguageModel()
 m = model.to(device)
 
 # create a PyTorch optimizer
